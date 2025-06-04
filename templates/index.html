@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Chat with AdeLiving</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+
+<div class="chat-container">
+
+  <!-- Header -->
+  <div class="chat-header">
+    <div>
+      💬 Chat with <strong>AdeLiving</strong>
+      <div class="status">Online • Real Estate Assistant</div>
+    </div>
+    <div style="display: flex; gap: 8px;">
+      <select id="location" style="border-radius: 10px; padding: 3px;">
+        <option selected disabled>📍 Select Area</option>
+        <option>Adelaide CBD</option>
+        <option>North Adelaide</option>
+        <option>Glenelg</option>
+        <option>Prospect</option>
+        <option>Norwood</option>
+        <option>Burnside</option>
+      </select>
+      <button onclick="startDictation()">🎤 Speak</button>
+      <button onclick="showEstimator()">💰 Estimator</button>
+      <button onclick="clearChat()">🗑 Clear</button>
+      <button onclick="exportChat()">📥 Export</button>
+    </div>
+  </div>
+
+  <!-- Chat Messages -->
+  <div class="chat-body" id="chat-box"></div>
+
+  <!-- Input Area -->
+  <div class="chat-footer">
+    <input type="text" id="input" placeholder="Ask something about real estate..." onkeypress="handleKeyPress(event)">
+    <button onclick="sendMessage()">Send</button>
+  </div>
+</div>
+
+<!-- Estimator Popup -->
+<div id="estimator-popup" style="display:none; position: fixed; top: 20%; left: 50%; transform: translateX(-50%);
+  background: white; padding: 20px; border-radius: 15px; box-shadow: 0 0 20px rgba(0,0,0,0.2); z-index: 1000;">
+  <h3>🏠 Mortgage Estimator</h3>
+  <label>Property Price (AUD):</label><br>
+  <input type="number" id="price" placeholder="e.g., 600000"><br><br>
+  <label>Interest Rate (% per year):</label><br>
+  <input type="number" id="rate" placeholder="e.g., 5"><br><br>
+  <label>Loan Term (years):</label><br>
+  <input type="number" id="years" placeholder="e.g., 25"><br><br>
+  <button onclick="calculateEMI()">Calculate</button>
+  <button onclick="hideEstimator()" style="margin-left:10px;">Close</button>
+  <p id="emi-result" style="margin-top: 10px; font-weight: bold;"></p>
+</div>
+
+<script>
+  let chatLog = [];
+
+  function formatTime() {
+    const now = new Date();
+    return now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  }
+
+  function speakText(text) {
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = 'en-AU';
+    utterance.rate = 1;
+    window.speechSynthesis.speak(utterance);
+  }
+
+  async function sendMessage() {
+    const input = document.getElementById("input");
+    const location = document.getElementById("location").value;
+    const chatBox = document.getElementById("chat-box");
+    const message = input.value.trim();
+    if (!message) return;
+
+    const userMessage = location && location !== "📍 Select Area"
+      ? `(${location}) ${message}` : message;
+
+    chatLog.push(`You: ${userMessage}`);
+
+    chatBox.innerHTML += `
+      <div class="message user">
+        <img src="https://cdn-icons-png.flaticon.com/512/1946/1946429.png" class="avatar">
+        <div>
+          <div class="bubble">${userMessage}</div>
+          <div class="timestamp">${formatTime()}</div>
+        </div>
+      </div>
+    `;
+    input.value = "";
+    chatBox.scrollTop = chatBox.scrollHeight;
+
+    const loadingId = `loading-${Date.now()}`;
+    chatBox.innerHTML += `
+      <div class="message bot" id="${loadingId}">
+        <img src="https://cdn-icons-png.flaticon.com/512/4712/4712035.png" class="avatar">
+        <div class="bubble typing-indicator">AdeLiving is typing...</div>
+      </div>
+    `;
+    chatBox.scrollTop = chatBox.scrollHeight;
+
+    const res = await fetch("/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message: userMessage })
+    });
+
+    const data = await res.json();
+    const botReply = data.response;
+    chatLog.push(`AdeLiving: ${botReply}`);
+
+    document.getElementById(loadingId).outerHTML = `
+      <div class="message bot">
+        <img src="https://cdn-icons-png.flaticon.com/512/4712/4712035.png" class="avatar">
+        <div>
+          <div class="bubble">${botReply}</div>
+          <div class="timestamp">${formatTime()}</div>
+        </div>
+      </div>
+    `;
+    chatBox.scrollTop = chatBox.scrollHeight;
+    speakText(botReply);
+  }
+
+  function handleKeyPress(e) {
+    if (e.key === "Enter") sendMessage();
+  }
+
+  function startDictation() {
+    if (!('webkitSpeechRecognition' in window)) {
+      alert("Speech Recognition not supported in this browser.");
+      return;
+    }
+
+    const recognition = new webkitSpeechRecognition();
+    recognition.lang = "en-AU";
+    recognition.onresult = function(event) {
+      const transcript = event.results[0][0].transcript;
+      document.getElementById("input").value = transcript;
+      sendMessage();
+    };
+    recognition.onerror = function() {
+      alert("Speech recognition error.");
+    };
+    recognition.start();
+  }
+
+  function showEstimator() {
+    document.getElementById("estimator-popup").style.display = "block";
+  }
+
+  function hideEstimator() {
+    document.getElementById("estimator-popup").style.display = "none";
+    document.getElementById("emi-result").textContent = "";
+  }
+
+  function calculateEMI() {
+    const price = parseFloat(document.getElementById("price").value);
+    const rate = parseFloat(document.getElementById("rate").value) / 100 / 12;
+    const years = parseFloat(document.getElementById("years").value);
+    const n = years * 12;
+
+    if (price && rate && years) {
+      const emi = (price * rate * Math.pow(1 + rate, n)) / (Math.pow(1 + rate, n) - 1);
+      document.getElementById("emi-result").textContent = `Estimated Monthly EMI: AUD ${emi.toFixed(2)}`;
+    } else {
+      document.getElementById("emi-result").textContent = "Please enter valid inputs.";
+    }
+  }
+
+  function clearChat() {
+    document.getElementById("chat-box").innerHTML = "";
+    chatLog = [];
+  }
+
+  function exportChat() {
+    const blob = new Blob([chatLog.join("\n")], { type: 'text/plain' });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.download = "adeliving_chat.txt";
+    link.href = url;
+    link.click();
+  }
+</script>
+
+</body>
+</html>
