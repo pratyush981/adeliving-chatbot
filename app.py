@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 
 load_dotenv()  # ✅ Load variables from .env
 
-# Use environment variable instead of hardcoding
+# Use environment variable instead of hardcoding 
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions"
 
