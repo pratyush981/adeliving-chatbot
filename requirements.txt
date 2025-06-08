@@ -1,7 +1,4 @@
 flask
 requests
-<<<<<<< HEAD
 python-dotenv
-=======
-python-dotenv
->>>>>>> 64d1d3509e114f9e4c052a47bc9645f552a9c6d0
+
